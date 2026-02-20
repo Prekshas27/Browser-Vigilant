@@ -34,6 +34,7 @@ const DEFAULT_SETTINGS = {
     domAnalysis: true,
     notifications: true,
     strictMode: false,
+    allowlist: ["localhost", "127.0.0.1"]
 };
 
 
@@ -155,10 +156,16 @@ async function appendChainBlock(threatData) {
     const prev = vault.blocks[vault.blocks.length - 1];
 
     // Compute domain hash for Merkle Threat Vault (SHA-256 of hostname only)
-    // Raw URL is NOT stored in the domain hash — only hostname, one-way hash
     const domain = (() => {
-        try { return new URL(threatData.url).hostname.toLowerCase(); }
-        catch { return threatData.url; }
+        try {
+            let host = new URL(threatData.url).hostname.toLowerCase();
+            if (host.startsWith('www.')) host = host.slice(4);
+            return host;
+        } catch {
+            let host = threatData.url.toLowerCase().trim();
+            if (host.startsWith('www.')) host = host.slice(4);
+            return host;
+        }
     })();
     const domainHash = await sha256(domain);
 
@@ -415,6 +422,7 @@ async function handleMessage(message, sender) {
     if (type === "SAVE_SETTINGS") {
         const merged = { ...DEFAULT_SETTINGS, ...message.settings };
         await chrome.storage.sync.set({ [KEYS.SETTINGS]: merged });
+        console.log(`[BV] Settings updated. Allowlist size: ${merged.allowlist?.length || 0}`);
         return { ack: true };
     }
 
@@ -544,7 +552,7 @@ function truncateUrl(url, max) {
 
 const PRENAV_BRANDS = ["google", "facebook", "amazon", "apple", "microsoft", "paypal",
     "netflix", "instagram", "twitter", "linkedin", "whatsapp", "youtube", "yahoo", "ebay",
-    "coinbase", "binance", "metamask", "opensea", "paytm", "phonepe", "hdfc", "icici", "sbi", 
+    "coinbase", "binance", "metamask", "opensea", "paytm", "phonepe", "hdfc", "icici", "sbi",
     "flipkart", "gpay", "bhim", "trustwallet", "ledger", "trezor"];
 
 const PRENAV_SUSP_TLDS = new Set(["xyz", "tk", "top", "cf", "ml", "ga", "gq", "pw", "cc",
@@ -650,14 +658,25 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
     const settings = await getSettings();
     if (!settings.protection) return;
 
-    // ── STAGE 1: Merkle Threat Vault — O(1) hash lookup (<0.1ms) ──────────────
-    // Check if hostname SHA-256 is in confirmed-blocked Set.
-    // If yes: instant block, skip all heuristics and ML entirely.
+    // ── STAGE 0: Allowlist check (Instant skip) ──────────────────────────────
     let domain = "";
     try { domain = new URL(url).hostname.toLowerCase(); } catch { return; }
 
+    const allowed = settings.allowlist || [];
+    const isAllowed = allowed.some(d => {
+        const cleanD = d.trim().toLowerCase();
+        return domain === cleanD || domain.endsWith("." + cleanD);
+    });
+
+    if (isAllowed) {
+        console.log(`[BV] Allowlist matched: ${domain}. Bypassing all filters.`);
+        return;
+    }
+
+    // ── STAGE 1: Merkle Threat Vault — O(1) hash lookup (<0.1ms) ──────────────
     const dHash = await sha256(domain);
     if (blockedDomainHashes.has(dHash)) {
+        console.log(`[BV] Threat Vault block: ${domain}`);
         const params = new URLSearchParams({
             url: encodeURIComponent(url),
             risk: 100,
@@ -665,7 +684,6 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
             signals: encodeURIComponent("Merkle Vault match|SHA-256 domain hash confirmed"),
         });
         chrome.tabs.update(details.tabId, { url: chrome.runtime.getURL(`block.html?${params}`) });
-        // Badge only — no new vault entry needed (already recorded)
         chrome.action.setBadgeBackgroundColor({ color: "#ef4444", tabId: details.tabId });
         chrome.action.setBadgeText({ text: "✕", tabId: details.tabId });
         return;
@@ -699,6 +717,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 
     // ── THREAT: block BEFORE page loads ───────────────────────────────────────
     if (result.verdict === "threat" && settings.autoBlock) {
+        console.log(`[BV] Heuristic block: ${hostname} (Score: ${result.riskScore})`);
         const params = new URLSearchParams({
             url: encodeURIComponent(url),
             risk: result.riskScore,

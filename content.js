@@ -1,15 +1,49 @@
 /**
  * content.js — Browser Vigilant Detection Engine (Layers 1–4)
- * Enhanced with Blockchain Threat Vault Integration
- *
- * Layer 1: 48-feature URL extraction via Rust WASM
- * Layer 2: ONNX ML ensemble inference (RF + GBM soft-vote)
- * Layer 3: Heuristic rule engine (Levenshtein, punycode, TLD, UPI)
- * Layer 4: DOM behavioral analysis (forms, iframes, obfuscated scripts)
- * Layer 5: Blockchain-based threat verification and consensus
- *
- * Layer 6 (file downloads) is handled by background.js.
  */
+
+// ── Web Dashboard Bridge (PRIORITY) ──────────────────────────────────────────
+let cachedSettings = null; // Local copy for instant allowlist checks
+
+window.addEventListener("message", (event) => {
+    if (!event.data || event.data.type !== "BV_WEB_REQUEST") return;
+
+    const { action, settings } = event.data;
+
+    // Cache settings locally if sent from dashboard
+    if (action === "SAVE_SETTINGS" && settings) {
+        cachedSettings = settings;
+    }
+
+    if (action === "GET_STATS") {
+        try {
+            chrome.runtime.sendMessage({ type: "GET_STATE" }, (response) => {
+                if (chrome.runtime.lastError) return;
+                if (response) {
+                    if (response.settings) cachedSettings = response.settings;
+                    window.postMessage({
+                        type: "BV_WEB_RESPONSE",
+                        action: "GET_STATS",
+                        data: response
+                    }, "*");
+                }
+            });
+        } catch (e) { }
+    }
+
+    if (action === "SAVE_SETTINGS") {
+        try {
+            chrome.runtime.sendMessage({ type: "SAVE_SETTINGS", settings }, (response) => {
+                if (chrome.runtime.lastError) return;
+                window.postMessage({
+                    type: "BV_WEB_RESPONSE",
+                    action: "SAVE_SETTINGS",
+                    success: response?.ack
+                }, "*");
+            });
+        } catch (e) { }
+    }
+});
 
 // ── Blockchain Threat Vault Integration ──────────────────────────────────────────
 // Initialize blockchain components
@@ -603,15 +637,13 @@ async function submitThreatToBlockchain(domain, confidence, threatType, evidence
             ort.env.wasm.proxy = false; // no web worker proxy
             // Configure ONNX Runtime for extension environment
             ort.env.wasm.numThreads = 1;     // disable threading to avoid loading threaded modules
-            ort.env.wasm.simd = true;        // enable SIMD if available
+            ort.env.wasm.simd = false;       // force disable SIMD to avoid loading separate .wasm files that fail in extension context
             ort.env.wasm.wasmPaths = {
                 'ort-wasm.wasm': chrome.runtime.getURL('ort-wasm.wasm'),
-                'ort-wasm-simd.wasm': chrome.runtime.getURL('ort-wasm-simd.wasm'),
-                // Explicitly exclude threaded modules that cause errors
-                'ort-wasm-simd-threaded.jsep.mjs': null,
-                'ort-wasm-threaded.jsep.mjs': null,
-                'ort-wasm-threaded.wasm': null,
             };
+            // Explicitly prevent search for other wasm files
+            ort.env.wasm.proxy = false;
+            ort.env.workers = 0;
             // Remove any corejs paths that might cause issues
             ort.env.wasm.wasmCorejsPaths = undefined;
             if (ort.env.wasm.corejs) ort.env.wasm.corejs = undefined;
@@ -708,6 +740,14 @@ async function submitThreatToBlockchain(domain, confidence, threatType, evidence
     // ── Blocking ──────────────────────────────────────────────────────────────────
 
     function blockPage(threatType, riskScore, signals) {
+        // --- EMERGENCY ALLOWLIST BYPASS ---
+        const domain = window.location.hostname.toLowerCase();
+        const allowed = cachedSettings?.allowlist || [];
+        if (allowed.some(d => domain === d.trim().toLowerCase() || domain.endsWith("." + d.trim().toLowerCase()))) {
+            console.log(`[BV] Emergency Bypass: ${domain} is allowlisted. Navigation allowed.`);
+            return;
+        }
+
         const blockUrl = chrome.runtime.getURL("block.html");
         const params = new URLSearchParams({
             url: encodeURIComponent(window.location.href),
@@ -724,35 +764,42 @@ async function submitThreatToBlockchain(domain, confidence, threatType, evidence
         const t0 = performance.now();
         const url = window.location.href;
 
-        // Layer 0: Blockchain Threat Vault Check (fastest, O(1) lookup)
+        // --- LOAD SETTINGS FIRST ---
+        let settings = cachedSettings || { protection: true, domAnalysis: true, autoBlock: true, allowlist: [] };
+
+        // Always try to get most fresh state from background too
+        try {
+            const state = await chrome.runtime.sendMessage({ type: "GET_STATE" });
+            if (state && state.settings) {
+                settings = state.settings;
+                cachedSettings = settings; // Update cache
+            }
+        } catch {
+            console.warn("[BV] Background sync delayed, using cache.");
+        }
+
+        if (settings.protection === false) return;
+
+        // --- LAYER 0: ALLOWLIST (Highest Priority) ---
+        const currentDomain = window.location.hostname.toLowerCase();
+        const allowed = settings.allowlist || [];
+        if (allowed.some(d => currentDomain === d.trim().toLowerCase() || currentDomain.endsWith("." + d.trim().toLowerCase()))) {
+            console.log(`[BV] Allowlisted domain: ${currentDomain}. Skipping all checks.`);
+            return;
+        }
+
+        // --- LAYER 1: Blockchain Threat Vault Check ---
         try {
             const blockchainResult = await checkThreatWithBlockchain(url);
             if (blockchainResult && blockchainResult.isThreat) {
-                console.log(`[Blockchain] Threat detected: ${url} (${blockchainResult.source})`);
-                // Immediately block without further processing
                 blockPage(blockchainResult.threatType, 99, [`Blockchain verified threat: ${blockchainResult.source}`]);
                 return;
             }
         } catch (error) {
-            console.warn('[Blockchain] Check failed, continuing with traditional detection:', error);
-        }
-        let settings = { protection: true, domAnalysis: true, autoBlock: true }; // robust default
-        try {
-            // content.js does not get a valid tab object from getCurrent, so we omit tabId
-            const state = await chrome.runtime.sendMessage({
-                type: "GET_STATE"
-            });
-            if (state && state.settings) {
-                settings = state.settings;
-            }
-        } catch {
-            console.warn("[BV] Failed to get settings from background. Using defaults.");
+            console.warn('[Blockchain] Check failed, continuing...', error);
         }
 
-        if (settings.protection === false) {
-            console.log("[BV] Protection is disabled by user settings.");
-            return;
-        }
+        // (Blockchain check completed above, now proceed with heuristics and ML)
 
         // Layer 3: Heuristics (fast, synchronous)
         const hResult = runHeuristics(url);

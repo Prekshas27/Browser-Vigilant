@@ -1,9 +1,6 @@
-// @ts-nocheck
 import { NextResponse } from 'next/server';
-// In-memory blockchain threat registry (for demo/web interface)
-// In production, this would connect to the actual blockchain network
-const threatRegistry = new Map<string, any>();
-const syncLogs = new Map<string, any>();
+export const dynamic = 'force-dynamic';
+import { threatRegistry, syncLogs } from '@/lib/store';
 
 export async function POST(req: Request) {
     try {

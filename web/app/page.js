@@ -34,27 +34,79 @@ export default function Home() {
   const [extensionConnected, setExtensionConnected] = useState(false);
   const [extensionStats, setExtensionStats] = useState({ totalScanned: 0, totalBlocked: 0, threatsToday: 0 });
 
+  // Bridge logic (No logging for production)
+  useEffect(() => {
+    // Linked
+  }, [extensionConnected]);
+
   const [allowlist, setAllowlist] = useState(["localhost", "127.0.0.1"]);
+  const [extensionSettings, setExtensionSettings] = useState(null);
   const [isAddingDomain, setIsAddingDomain] = useState(false);
   const [newDomain, setNewDomain] = useState("");
 
   const handleAddDomain = (e) => {
     e.preventDefault();
-    const domain = newDomain.trim();
+    let domain = newDomain.trim().toLowerCase();
     if (!domain) return;
-    if (!allowlist.includes(domain)) {
-      setAllowlist([...allowlist, domain]);
+
+    // Remove protocol and paths if present
+    try {
+      if (domain.includes("://")) {
+        domain = new URL(domain).hostname;
+      } else if (domain.includes("/")) {
+        domain = domain.split("/")[0];
+      }
+    } catch (e) { }
+
+    const updated = allowlist.includes(domain) ? allowlist : [...allowlist, domain];
+    setAllowlist(updated);
+
+    // Sync with extension
+    if (extensionConnected && extensionSettings) {
+      window.postMessage({
+        type: "BV_WEB_REQUEST",
+        action: "SAVE_SETTINGS",
+        settings: { ...extensionSettings, allowlist: updated }
+      }, "*");
     }
+
     setNewDomain("");
     setIsAddingDomain(false);
   };
 
   const handleRemoveDomain = (domain) => {
-    setAllowlist(allowlist.filter(d => d !== domain));
+    const updated = allowlist.filter(d => d !== domain);
+    setAllowlist(updated);
+
+    // Sync with extension
+    if (extensionConnected && extensionSettings) {
+      window.postMessage({
+        type: "BV_WEB_REQUEST",
+        action: "SAVE_SETTINGS",
+        settings: { ...extensionSettings, allowlist: updated }
+      }, "*");
+    }
+  };
+
+  const cleanDomain = (d) => {
+    try {
+      let hostname = d.trim().toLowerCase();
+      if (hostname.includes('://')) {
+        hostname = new URL(hostname).hostname;
+      } else if (hostname.includes('/')) {
+        hostname = hostname.split('/')[0];
+      }
+      if (hostname.startsWith('www.')) hostname = hostname.slice(4);
+      if (hostname.includes(':')) hostname = hostname.split(':')[0];
+      return hostname;
+    } catch (e) {
+      return d.toLowerCase().trim().replace(/^www\./, '');
+    }
   };
 
   const hashString = async (str) => {
-    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+    const cleaned = cleanDomain(str);
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(cleaned));
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
   };
 
@@ -65,9 +117,14 @@ export default function Home() {
     setFlagStatus("submitting");
 
     try {
-      // Basic URL parser just to get hostname
-      const parsedUrl = url.includes("://") ? new URL(url) : new URL(`https://${url}`);
+      // Robust URL parsing to extract the correct hostname for hashing
+      let cleanUrl = url.trim().toLowerCase();
+      if (!cleanUrl.includes("://")) cleanUrl = "https://" + cleanUrl;
+
+      const parsedUrl = new URL(cleanUrl);
       let hostname = parsedUrl.hostname;
+      // Remove 'www.' if present for more consistent hashing
+      hostname = hostname.startsWith("www.") ? hostname.slice(4) : hostname;
 
       const hash = await hashString(hostname);
 
@@ -86,6 +143,13 @@ export default function Home() {
 
       setFlagStatus("success");
       setFlagUrl("");
+
+      // Refresh stats immediately
+      const statsRes = await fetch("/api/vault/stats");
+      if (statsRes.ok) {
+        const d = await statsRes.json();
+        setVaultData(d);
+      }
     } catch (err) {
       console.error(err);
       setFlagStatus("error");
@@ -94,7 +158,21 @@ export default function Home() {
     setTimeout(() => setFlagStatus(null), 3500);
   };
 
-  /* fetch vault stats when navigating to the vault tab */
+  /* fetch global vault stats on mount */
+  useEffect(() => {
+    const fetchStats = () => {
+      fetch("/api/vault/stats")
+        .then(r => r.json())
+        .then(d => setVaultData(d))
+        .catch(() => setVaultData({ error: true }));
+    };
+
+    fetchStats();
+    const interval = setInterval(fetchStats, 30000); // Refresh every 30s
+    return () => clearInterval(interval);
+  }, []);
+
+  /* fetch vault stats when specifically navigating to the vault tab for immediate update */
   useEffect(() => {
     if (nav !== "vault") return;
     setVaultLoading(true);
@@ -108,20 +186,41 @@ export default function Home() {
   /* extension bridge listener */
   useEffect(() => {
     const handleMessage = (event) => {
-      if (event.source !== window || !event.data) return;
-      if (event.data.type === "BV_WEB_RESPONSE") {
-        setExtensionConnected(true);
-        if (event.data.data?.stats) {
-          setExtensionStats(event.data.data.stats);
+      // Basic check: must be a response from Browser Vigilant
+      if (!event.data || event.data.type !== "BV_WEB_RESPONSE") return;
+
+      const responseData = event.data.data;
+      if (!responseData) return;
+
+      setExtensionConnected(true);
+
+      // Handle stats (total scanned, blocked, etc)
+      if (responseData.stats) {
+        setExtensionStats(responseData.stats);
+      }
+
+      // Handle settings and allowlist
+      if (responseData.settings) {
+        setExtensionSettings(responseData.settings);
+        if (responseData.settings.allowlist) {
+          setAllowlist(responseData.settings.allowlist);
         }
       }
     };
     window.addEventListener("message", handleMessage);
 
-    // Request stats from the extension bridge
+    // Initial request
     window.postMessage({ type: "BV_WEB_REQUEST", action: "GET_STATS" }, "*");
 
-    return () => window.removeEventListener("message", handleMessage);
+    // Poll extension stats every 5 seconds for real-time overview updates
+    const interval = setInterval(() => {
+      window.postMessage({ type: "BV_WEB_REQUEST", action: "GET_STATS" }, "*");
+    }, 5000);
+
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      clearInterval(interval);
+    };
   }, []);
 
   return (
@@ -174,15 +273,17 @@ export default function Home() {
                 <div className={`${styles.statCard} ${styles.statCardLarge}`}>
                   <div className={styles.statCardInner}>
                     <div>
-                      <div className={styles.statLabel}>Scams avoided</div>
+                      <div className={styles.statLabel}>Your Safety Impact</div>
                       <div className={styles.statNumber}>
-                        {extensionConnected ? extensionStats.totalBlocked : 14}
-                        <span className={styles.statDelta}>{extensionConnected ? `+${extensionStats.threatsToday} today` : "+2 this week"}</span>
+                        {extensionConnected ? extensionStats.totalBlocked : 0}
+                        <span className={styles.statDelta}>
+                          {extensionConnected ? `+${extensionStats.threatsToday} today` : "Not synced"}
+                        </span>
                       </div>
                       <p className={styles.statDesc}>
                         {extensionConnected
-                          ? `That's ${extensionStats.totalBlocked} times we stepped in to gently pause a connection before it could do any harm. Great job staying safe!`
-                          : "That's 14 times we stepped in to gently pause a connection before it could do any harm. Great job staying safe!"}
+                          ? `Browser Vigilant has protected your sessions ${extensionStats.totalBlocked} times locally. Your on-device AI is working.`
+                          : "Connect the Browser Vigilant extension to see your real-time local protection statistics."}
                       </p>
                     </div>
                     <div className={styles.statIllustration}>
@@ -190,6 +291,27 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
+
+                <div className={`${styles.statCard} ${styles.statCardLarge}`} style={{ borderLeft: '4px solid #14B8A6' }}>
+                  <div className={styles.statCardInner}>
+                    <div>
+                      <div className={styles.statLabel}>Global Vault Network</div>
+                      <div className={styles.statNumber}>
+                        {vaultData?.totalThreats ?? 0}
+                        <span className={styles.statDelta} style={{ color: '#14B8A6' }}>
+                          Verified Hashes
+                        </span>
+                      </div>
+                      <p className={styles.statDesc}>
+                        The decentralized network has identified {vaultData?.totalThreats ?? 0} unique threats across {vaultData?.sourceBreakdown?.length ?? 0} verification sources.
+                      </p>
+                    </div>
+                    <div className={styles.statIllustration}>
+                      <div style={{ fontSize: '60px', opacity: 0.1 }}>⛁</div>
+                    </div>
+                  </div>
+                </div>
+
                 <div className={styles.statCardStack}>
                   <div className={`${styles.statCard} ${styles.statCardSm}`}>
                     <div className={styles.statSmIcon} style={{ background: "rgba(255,123,107,0.1)" }}>
@@ -198,9 +320,9 @@ export default function Home() {
                       </svg>
                     </div>
                     <div className={styles.statSmNumber}>
-                      {extensionConnected ? `${(extensionStats.totalBlocked * 0.4).toFixed(1)}s` : "2.4s"}
+                      {extensionConnected ? `${(extensionStats.totalBlocked * 0.4).toFixed(1)}s` : "0.0s"}
                     </div>
-                    <div className={styles.statSmLabel}>AVG. LOAD TIME SAVED</div>
+                    <div className={styles.statSmLabel}>EST. TIME SAVED</div>
                   </div>
                   <div className={`${styles.statCard} ${styles.statCardSm}`}>
                     <div className={styles.statSmIcon} style={{ background: "rgba(52,211,153,0.1)" }}>
@@ -210,9 +332,9 @@ export default function Home() {
                       </svg>
                     </div>
                     <div className={styles.statSmNumber}>
-                      {extensionConnected ? extensionStats.totalScanned * 2 : 128}
+                      {extensionConnected ? extensionStats.totalScanned : 0}
                     </div>
-                    <div className={styles.statSmLabel}>DOMAINS SCANNED</div>
+                    <div className={styles.statSmLabel}>SITES ANALYZED</div>
                   </div>
                 </div>
               </div>

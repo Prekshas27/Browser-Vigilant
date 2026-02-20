@@ -126,19 +126,28 @@ class BlockchainThreatVault {
     // Synchronize with the network
     async syncWithNetwork() {
         try {
-            // In a real implementation, this would:
-            // 1. Connect to peer nodes
-            // 2. Download new threat hashes
-            // 3. Verify and merge with local data
-            // 4. Upload local contributions
-
-            ;
-
-            // For demo purposes, we'll just save current state
+            // Synchronize with the global vault API
+            const response = await fetch('http://localhost:3000/api/vault/stats');
+            if (response.ok) {
+                const stats = await response.json();
+                if (stats.recentThreats) {
+                    let newHashes = 0;
+                    for (const threat of stats.recentThreats) {
+                        if (!this.localThreats.has(threat.hash)) {
+                            this.localThreats.add(threat.hash);
+                            await this.merkleTree.addLeaf(threat.hash);
+                            newHashes++;
+                        }
+                    }
+                    if (newHashes > 0) {
+                        console.log(`[Blockchain] Synced ${newHashes} new threat hashes from global vault`);
+                    }
+                }
+            }
+            // Save updated state
             await this.saveThreatData();
-
         } catch (error) {
-            ;
+            console.warn('[Blockchain] Network sync failed (is the web server running?):', error);
         }
     }
 
@@ -198,6 +207,23 @@ class BlockchainThreatVault {
             // Submit for network validation
             await this.consensus.submitThreat(domainHash, evidence, confidence);
 
+            // Also submit to the global vault API for aggregation
+            try {
+                await fetch('http://localhost:3000/api/vault/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        hash: domainHash,
+                        source: 'extension-shield',
+                        confidence: confidence,
+                        threatType: threatType,
+                        clientId: this.consensus.nodeId
+                    })
+                });
+            } catch (apiError) {
+                console.warn('[Blockchain] Failed to submit to global API:', apiError);
+            }
+
             // Save updated data
             await this.saveThreatData();
 
@@ -250,16 +276,26 @@ class BlockchainThreatVault {
     // Hash domain name using SHA-256
     async hashDomain(domain) {
         // Extract hostname if full URL provided
-        let hostname = domain;
+        let hostname = domain.trim().toLowerCase();
         try {
-            if (domain.startsWith('http')) {
-                hostname = new URL(domain).hostname;
+            if (hostname.includes('://')) {
+                hostname = new URL(hostname).hostname;
+            } else if (hostname.includes('/')) {
+                hostname = hostname.split('/')[0];
+            }
+            // Remove 'www.' for consistency
+            if (hostname.startsWith('www.')) {
+                hostname = hostname.slice(4);
+            }
+            // Remove port if present
+            if (hostname.includes(':')) {
+                hostname = hostname.split(':')[0];
             }
         } catch (e) {
-            // If URL parsing fails, use as-is
+            // Fallback to basic cleaning
         }
 
-        return await this.merkleTree.sha256(hostname.toLowerCase());
+        return await this.merkleTree.sha256(hostname);
     }
 
     // Sign verification (simplified)
