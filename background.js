@@ -23,7 +23,7 @@ const KEYS = {
 const CHAIN_LEGACY_KEY = "bv_threat_chain";
 
 const MAX_HISTORY = 100;
-const API_BASE = "http://localhost:3000/api/vault";
+const API_BASE = "http://localhost:3000/api/vault";  // Kept as http to match CSP, can be changed to https if needed
 
 const DEFAULT_SETTINGS = {
     protection: true,
