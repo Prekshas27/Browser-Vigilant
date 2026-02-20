@@ -1,0 +1,37 @@
+#browser-vigilant-block-screen {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background-color: #d32f2f !important; /* Deep red for warning */
+    color: white !important;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+    z-index: 2147483647 !important; /* Max z-index to overlay everything */
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    text-align: center !important;
+    padding: 20px !important;
+    box-sizing: border-box !important;
+}
+
+#browser-vigilant-block-screen h1 {
+    font-size: 3rem !important;
+    margin-bottom: 20px !important;
+    color: white !important;
+    font-weight: bold !important;
+}
+
+#browser-vigilant-block-screen p {
+    font-size: 1.5rem !important;
+    max-width: 800px !important;
+    line-height: 1.5 !important;
+    margin-bottom: 30px !important;
+}
+
+#browser-vigilant-block-screen .icon {
+    font-size: 5rem !important;
+    margin-bottom: 20px !important;
+}

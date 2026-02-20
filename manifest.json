@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Browser Vigilant",
+  "version": "1.0",
+  "description": "A Chrome Extension that detects and blocks phishing/scam websites in real time using a locally running Machine Learning model.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "ort.min.js",
+        "content.js"
+      ],
+      "css": [
+        "style.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "model/model.onnx",
+        "wasm-build/*",
+        "ort-wasm.wasm",
+        "ort-wasm-simd.wasm"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}
