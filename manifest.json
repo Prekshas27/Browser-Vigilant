@@ -70,10 +70,6 @@
     }
   ],
   "content_security_policy": {
-<<<<<<< Updated upstream
-    "extension_pages": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'"
-=======
     "extension_pages": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' http://localhost:3000 http://127.0.0.1:3000 https://localhost:3000 https://127.0.0.1:3000"
->>>>>>> Stashed changes
   }
 }

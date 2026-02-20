@@ -349,12 +349,6 @@
         let features = null;
 
         try {
-<<<<<<< Updated upstream
-            // Layer 1: Init WASM from global injected script
-            const wasmBinaryPath = chrome.runtime.getURL("wasm-build/wasm_feature_bg.wasm");
-            if (typeof window.wasm_bindgen === "function") {
-                await window.wasm_bindgen(wasmBinaryPath);
-=======
             // Wait for WASM to be ready via our loader
             const maxWait = 3000; // Reduced wait time
             const startTime = Date.now();
@@ -374,9 +368,11 @@
             } else {
                 // Extract features using WASM
                 features = window.wasmFeatureExtractor.extract_features(url);
->>>>>>> Stashed changes
             }
-            features = Array.from(window.wasm_bindgen.extract_features(url));
+
+            if (!features && window.wasm_bindgen && typeof window.wasm_bindgen.extract_features === 'function') {
+                features = Array.from(window.wasm_bindgen.extract_features(url));
+            }
 
             // Layer 2: ONNX ML inference
             // Disable threading + JSEP — only basic ort-wasm.wasm or ort-wasm-simd.wasm exist
@@ -394,12 +390,9 @@
                 'ort-wasm-threaded.jsep.mjs': null,
                 'ort-wasm-threaded.wasm': null,
             };
-<<<<<<< Updated upstream
-=======
             // Remove any corejs paths that might cause issues
             ort.env.wasm.wasmCorejsPaths = undefined;
             if (ort.env.wasm.corejs) ort.env.wasm.corejs = undefined;
->>>>>>> Stashed changes
 
             const modelUrl = chrome.runtime.getURL("model.onnx");
             const session = await ort.InferenceSession.create(modelUrl, {
