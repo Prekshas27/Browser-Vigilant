@@ -12,7 +12,7 @@ pub fn extract_features(url: &str) -> Vec<f32> {
     features[1] = url.matches('.').count() as f32;
     
     // Feature 2: Presence of IPv4 address in the URL (basic heuristic)
-    features[2] = if url.contains(regex_like_ip) { 1.0 } else { 0.0 }; // Mock logic
+    features[2] = if regex_like_ip(url) { 1.0 } else { 0.0 }; // Mock logic
     
     // Feature 3: HTTPS usage
     features[3] = if url.starts_with("https://") { 1.0 } else { 0.0 };
@@ -26,7 +26,7 @@ pub fn extract_features(url: &str) -> Vec<f32> {
     
     // Feature 6: Number of subdomains (dots in domain)
     let domain_dots = domain.matches('.').count() as f32;
-    let subdomains = if domain_dots > 1 { domain_dots - 1.0 } else { 0.0 };
+    let subdomains = if domain_dots > 1.0 { domain_dots - 1.0 } else { 0.0 };
     features[6] = subdomains;
 
     // Feature 7-10: Suspicious keywords
