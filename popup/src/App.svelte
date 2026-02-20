@@ -5,6 +5,7 @@
   import History from "./components/History.svelte";
   import ThreatMap from "./components/ThreatMap.svelte";
   import Settings from "./components/Settings.svelte";
+  import Vault from "./components/Vault.svelte";
   import shieldLogo from "./assets/shield.png";
 
   let activeTab = "shield";
@@ -17,6 +18,9 @@
   let history = [];
   let chain = [];
   let chainTampered = false;
+  let merkleRoot = null;
+  let localVault = [];
+  let syncMeta = null;
   let loading = true;
   let currentTabId = null;
   let currentTabUrl = ""; // passed to Shield for instant auto-scan
@@ -25,6 +29,7 @@
     { id: "shield", label: "Shield" },
     { id: "history", label: "History" },
     { id: "ledger", label: "Ledger" },
+    { id: "vault", label: "Vault" },
     { id: "settings", label: "Settings" },
   ];
 
@@ -58,6 +63,9 @@
       history = res.history ?? [];
       chain = res.chain ?? [];
       chainTampered = res.chainTampered ?? false;
+      merkleRoot = res.merkleRoot ?? null;
+      localVault = res.localVault ?? [];
+      syncMeta = res.syncMeta ?? null;
 
       // If tabState is null but URL is a real web page, retry once after a
       // short delay — content.js may still be running its scan
@@ -96,6 +104,13 @@
     if (typeof chrome !== "undefined" && chrome?.runtime?.sendMessage) {
       await chrome.runtime.sendMessage({ type: "CLEAR_HISTORY" });
       history = [];
+    }
+  }
+
+  async function handleRemoveFlag(domain_hash) {
+    if (typeof chrome !== "undefined" && chrome?.runtime?.sendMessage) {
+      await chrome.runtime.sendMessage({ type: "REMOVE_FLAG", domain_hash });
+      localVault = localVault.filter((t) => t.domain_hash !== domain_hash);
     }
   }
 
@@ -191,6 +206,15 @@
     {:else if activeTab === "ledger"}
       <div class="tab-page">
         <ThreatMap {chain} {chainTampered} />
+      </div>
+    {:else if activeTab === "vault"}
+      <div class="tab-page">
+        <Vault
+          {localVault}
+          {syncMeta}
+          {merkleRoot}
+          onRemoveFlag={handleRemoveFlag}
+        />
       </div>
     {:else if activeTab === "settings"}
       <div class="tab-page">

@@ -154,10 +154,33 @@
     function handleKey(e) {
         if (e.key === "Enter") handleScan();
     }
+
     function clearScan() {
         scanInput = "";
         scanResult = null;
         scanError = "";
+    }
+
+    let reporting = false;
+    let reported = false;
+    
+    async function reportSite() {
+        if (!currentUrl || reporting || reported) return;
+        reporting = true;
+        try {
+            if (typeof chrome !== "undefined" && chrome?.runtime?.sendMessage) {
+                await chrome.runtime.sendMessage({
+                    type: "MANUAL_FLAG",
+                    url: currentUrl,
+                    confidence: 0.7
+                });
+            }
+            reported = true;
+        } catch (e) {
+            console.error("Report failed", e);
+        } finally {
+            reporting = false;
+        }
     }
 </script>
 
@@ -484,6 +507,12 @@
                             often change just one letter.
                         </p>
                     </div>
+                </div>
+                
+                <div class="actions-fixed">
+                    <button class="btn-trust" on:click={reportSite} disabled={reporting || reported} style="width: 100%; margin-top: 12px; color: {reported ? '#10b981' : 'var(--text-primary)'};">
+                        {reported ? "Site Reported ✓" : reporting ? "Reporting..." : "🚩 Report Site as Malicious"}
+                    </button>
                 </div>
             {:else}
                 <!-- Threat List (Warning/Threat Mode) -->
