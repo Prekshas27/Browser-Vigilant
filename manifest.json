@@ -40,6 +40,7 @@
         "https://*/*"
       ],
       "js": [
+        "wasm-build/wasm_feature.js",
         "ort.min.js",
         "content.js"
       ],

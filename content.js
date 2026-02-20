@@ -319,14 +319,10 @@
         let features = null;
 
         try {
-            // Layer 1: Load Rust WASM module
-            const wasmJsPath = chrome.runtime.getURL("wasm-build/wasm_feature.js");
-            const { default: initWasm, extract_features } = await import(wasmJsPath);
+            // Layer 1: Init WASM from global injected script
             const wasmBinaryPath = chrome.runtime.getURL("wasm-build/wasm_feature_bg.wasm");
-
-            // NEW wasm-bindgen API: pass object, not bare string
-            await initWasm({ module_or_path: fetch(wasmBinaryPath) });
-            features = Array.from(extract_features(url));
+            await wasm_bindgen(wasmBinaryPath);
+            features = Array.from(wasm_bindgen.extract_features(url));
 
             // Layer 2: ONNX ML inference
             // Disable threading + JSEP — only basic ort-wasm.wasm or ort-wasm-simd.wasm exist
