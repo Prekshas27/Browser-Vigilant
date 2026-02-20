@@ -1,37 +1,59 @@
-#browser-vigilant-block-screen {
+/* style.css — injected into every page via content_scripts
+   ONLY styles for the BV alert banner (no global styles that clash with page) */
+
+#bv-warning-banner {
+    all: initial;
     position: fixed !important;
     top: 0 !important;
     left: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    background-color: #d32f2f !important; /* Deep red for warning */
-    color: white !important;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
-    z-index: 2147483647 !important; /* Max z-index to overlay everything */
+    right: 0 !important;
+    z-index: 2147483647 !important;
+    background: linear-gradient(90deg, #7f1d1d, #991b1b) !important;
+    border-bottom: 2px solid #ef4444 !important;
+    padding: 8px 16px !important;
     display: flex !important;
-    flex-direction: column !important;
-    justify-content: center !important;
     align-items: center !important;
-    text-align: center !important;
-    padding: 20px !important;
-    box-sizing: border-box !important;
+    gap: 10px !important;
+    font-family: 'Inter', -apple-system, sans-serif !important;
+    font-size: 13px !important;
+    color: #fef2f2 !important;
+    box-shadow: 0 2px 20px rgba(239, 68, 68, 0.4) !important;
 }
 
-#browser-vigilant-block-screen h1 {
-    font-size: 3rem !important;
-    margin-bottom: 20px !important;
-    color: white !important;
-    font-weight: bold !important;
+#bv-warning-banner .bv-icon {
+    font-size: 18px !important;
+    flex-shrink: 0 !important;
 }
 
-#browser-vigilant-block-screen p {
-    font-size: 1.5rem !important;
-    max-width: 800px !important;
-    line-height: 1.5 !important;
-    margin-bottom: 30px !important;
+#bv-warning-banner .bv-text {
+    flex: 1 !important;
+    font-weight: 500 !important;
 }
 
-#browser-vigilant-block-screen .icon {
-    font-size: 5rem !important;
-    margin-bottom: 20px !important;
+#bv-warning-banner .bv-badge {
+    background: rgba(239, 68, 68, 0.3) !important;
+    border: 1px solid rgba(239, 68, 68, 0.5) !important;
+    border-radius: 4px !important;
+    padding: 2px 8px !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+    flex-shrink: 0 !important;
+}
+
+#bv-warning-banner .bv-close {
+    background: none !important;
+    border: none !important;
+    color: rgba(254, 242, 242, 0.6) !important;
+    cursor: pointer !important;
+    font-size: 16px !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    flex-shrink: 0 !important;
+    transition: color 0.15s !important;
+}
+
+#bv-warning-banner .bv-close:hover {
+    color: #fef2f2 !important;
 }

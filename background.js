@@ -400,3 +400,188 @@ function todayDateStr() {
 function truncateUrl(url, max) {
     return url.length > max ? url.slice(0, max - 3) + "..." : url;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PRE-NAVIGATION SCANNER
+// Fires BEFORE the page loads using webNavigation.onBeforeNavigate.
+// Runs a fast heuristic scan (< 2ms) on the URL.
+// → WARNING  : shows OS notification immediately
+// → THREAT   : redirects to block.html before page loads
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const PRENAV_BRANDS = ["google", "facebook", "amazon", "apple", "microsoft", "paypal",
+    "netflix", "instagram", "twitter", "linkedin", "whatsapp", "youtube", "yahoo", "ebay",
+    "coinbase", "binance", "paytm", "phonepe", "hdfc", "icici", "sbi", "flipkart", "gpay", "bhim"];
+
+const PRENAV_SUSP_TLDS = new Set(["xyz", "tk", "top", "cf", "ml", "ga", "gq", "pw", "cc",
+    "icu", "club", "online", "site", "website", "space", "live", "click", "link", "info",
+    "biz", "work", "store", "shop"]);
+
+const PRENAV_FREE_KW = ["free", "prize", "winner", "claim", "giveaway", "bonus", "lucky", "congratulations"];
+const PRENAV_FRAUD_KW = ["kyc", "verify", "update", "suspend", "block", "helpdesk", "refund", "tax-refund"];
+const PRENAV_LOGIN_KW = ["login", "signin", "sign-in", "account", "verify", "auth", "confirm"];
+
+function prenav_lev(a, b) {
+    const m = a.length, n = b.length;
+    let p = Array.from({ length: n + 1 }, (_, i) => i);
+    for (let i = 1; i <= m; i++) {
+        const c = [i];
+        for (let j = 1; j <= n; j++) {
+            c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        }
+        p = c;
+    }
+    return p[n];
+}
+
+function prenavScan(url) {
+    let score = 0;
+    const signals = [];
+    const low = url.toLowerCase();
+
+    let host = "", tld = "", domain = "", path = "", scheme = "";
+    try {
+        const u = new URL(url);
+        host = u.hostname;
+        path = u.pathname;
+        tld = host.split(".").pop() || "";
+        domain = host.split(".").slice(-2).join(".");
+        scheme = u.protocol.replace(":", "");
+    } catch { return { score: 0, signals: [], threatType: "Parse Error" }; }
+
+    // Skip legitimate extension pages and local files
+    if (scheme === "chrome" || scheme === "chrome-extension" ||
+        scheme === "edge" || scheme === "about" || scheme === "file") {
+        return { score: 0, signals: [], threatType: "Clean" };
+    }
+
+    // R1 — Punycode / IDN homograph
+    if (host.includes("xn--")) { score += 0.9; signals.push("Punycode / IDN Homograph"); }
+    // R2 — IP-in-URL
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) { score += 0.85; signals.push("IP Address in URL"); }
+    // R3 — Suspicious TLD
+    if (PRENAV_SUSP_TLDS.has(tld)) { score += 0.55; signals.push(`Suspicious TLD (.${tld})`); }
+    // R4 — Not HTTPS + login keywords
+    if (scheme !== "https" && PRENAV_LOGIN_KW.some(k => low.includes(k))) { score += 0.6; signals.push("Login Page on HTTP"); }
+    // R5 — Brand spoofing (Levenshtein ≤ 2)
+    const core = (domain.split(".")[0] || "");
+    const minD = Math.min(...PRENAV_BRANDS.map(b => prenav_lev(core, b)));
+    if (minD > 0 && minD <= 2) { score += 0.8; signals.push(`Brand Spoof: "${core}"`); }
+    // R6 — Multiple @ symbols
+    if ((url.match(/@/g) || []).length > 1) { score += 0.8; signals.push("Multiple @ Symbols"); }
+    // R7 — Excessive subdomains
+    if (host.split(".").length >= 5) { score += 0.45; signals.push("Excessive Subdomain Depth"); }
+    // R8 — Free/prize keywords
+    if (PRENAV_FREE_KW.some(k => low.includes(k))) { score += 0.5; signals.push("Prize/Scam Keywords"); }
+    // R9 — Fraud action keywords in domain/path
+    if (PRENAV_FRAUD_KW.some(k => low.includes(k))) { score += 0.45; signals.push("Fraud Action Keywords"); }
+    // R10 — Brand in subdomain but not registered domain
+    const sub = host.split(".").slice(0, -2).join(".");
+    const brandInSub = PRENAV_BRANDS.some(b => sub.includes(b));
+    const brandInReg = PRENAV_BRANDS.some(b => core.includes(b));
+    if (brandInSub && !brandInReg) { score += 0.85; signals.push("Brand Hijacked in Subdomain"); }
+    // R11 — UPI fraud patterns
+    if (/upi:\/\/pay|pa=.*@|vpa=/i.test(url)) { score += 0.6; signals.push("UPI Collect Request"); }
+    // R12 — Executable in URL path  
+    if (/\.(exe|scr|bat|ps1|vbs|cmd|msi)\b/i.test(path)) { score += 0.7; signals.push("Executable File in URL"); }
+
+    const riskScore = Math.min(Math.round(score * 100), 100);
+    let verdict = riskScore >= 50 ? "threat" : riskScore >= 30 ? "warning" : "safe";
+    const threatType = signals.length ? signals[0] : "Clean";
+    return { score: Math.min(score, 1.0), riskScore, signals, threatType, verdict };
+}
+
+// ── Rate limiting — prevent hammering notifications on fast navigations ────────
+const recentlyScanned = new Map(); // url → timestamp
+function isRateLimited(url) {
+    const key = new URL(url).hostname;
+    const now = Date.now();
+    if (recentlyScanned.has(key) && (now - recentlyScanned.get(key)) < 10000) return true;
+    recentlyScanned.set(key, now);
+    if (recentlyScanned.size > 100) {
+        const oldest = [...recentlyScanned.entries()].sort((a, b) => a[1] - b[1])[0][0];
+        recentlyScanned.delete(oldest);
+    }
+    return false;
+}
+
+// ── The main pre-navigation hook ───────────────────────────────────────────────
+chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
+    // Only scan main frame (frameId === 0), skip iframes
+    if (details.frameId !== 0) return;
+
+    const url = details.url;
+    if (!url.startsWith("http://") && !url.startsWith("https://")) return;
+
+    // Rate-limit: don't re-scan same host within 10s
+    if (isRateLimited(url)) return;
+
+    const settings = await getSettings();
+    if (!settings.protection) return;
+
+    const result = prenavScan(url);
+    if (result.verdict === "safe") return;
+
+    const hostname = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+
+    // ── WARNING: show OS notification ──────────────────────────────────────────
+    if (result.verdict === "warning" && settings.notifications) {
+        chrome.notifications.create(`bv-warn-${Date.now()}`, {
+            type: "basic",
+            iconUrl: "icons/icon48.png",
+            title: "⚠ Browser Vigilant — Suspicious Site",
+            message: `${result.threatType} detected on ${hostname}`,
+            contextMessage: `Risk: ${result.riskScore}/100 · Proceed with caution`,
+            priority: 1,
+        });
+        // Update badge
+        chrome.action.setBadgeBackgroundColor({ color: "#f59e0b", tabId: details.tabId });
+        chrome.action.setBadgeText({ text: "!", tabId: details.tabId });
+        return;
+    }
+
+    // ── THREAT: block BEFORE page loads ───────────────────────────────────────
+    if (result.verdict === "threat" && settings.autoBlock) {
+        const params = new URLSearchParams({
+            url: encodeURIComponent(url),
+            risk: result.riskScore,
+            threat: result.threatType,
+            signals: encodeURIComponent(result.signals.slice(0, 5).join("|")),
+        });
+        const blockPageUrl = chrome.runtime.getURL(`block.html?${params.toString()}`);
+
+        // Redirect to block page immediately
+        chrome.tabs.update(details.tabId, { url: blockPageUrl });
+
+        // Notify
+        if (settings.notifications) {
+            chrome.notifications.create(`bv-block-${Date.now()}`, {
+                type: "basic",
+                iconUrl: "icons/icon48.png",
+                title: "🛡 Browser Vigilant — Site Blocked",
+                message: `${result.threatType} on ${hostname}`,
+                contextMessage: `Risk score: ${result.riskScore}/100 — Navigation cancelled`,
+                priority: 2,
+            });
+        }
+
+        // Record in history + blockchain
+        await recordScan({
+            url, status: "threat", scanMs: 0,
+            riskScore: result.riskScore,
+            signals: result.signals,
+            threatType: result.threatType,
+        });
+        await updateStats(true);
+        await appendChainBlock({
+            url, threatType: result.threatType,
+            signals: result.signals,
+            riskScore: result.riskScore,
+        });
+
+        // Badge
+        chrome.action.setBadgeBackgroundColor({ color: "#ef4444", tabId: details.tabId });
+        chrome.action.setBadgeText({ text: "✕", tabId: details.tabId });
+    }
+});
+

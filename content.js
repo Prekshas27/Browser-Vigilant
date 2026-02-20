@@ -319,33 +319,45 @@
         let features = null;
 
         try {
-            // Load WASM
-            const wasmPath = chrome.runtime.getURL("wasm-build/wasm_feature.js");
-            const { default: initWasm, extract_features } = await import(wasmPath);
-            const wasmBinary = chrome.runtime.getURL("wasm-build/wasm_feature_bg.wasm");
-            await initWasm(wasmBinary);
+            // Layer 1: Load Rust WASM module
+            const wasmJsPath = chrome.runtime.getURL("wasm-build/wasm_feature.js");
+            const { default: initWasm, extract_features } = await import(wasmJsPath);
+            const wasmBinaryPath = chrome.runtime.getURL("wasm-build/wasm_feature_bg.wasm");
+
+            // NEW wasm-bindgen API: pass object, not bare string
+            await initWasm({ module_or_path: fetch(wasmBinaryPath) });
             features = Array.from(extract_features(url));
 
-            // ONNX inference
+            // Layer 2: ONNX ML inference
+            // Disable threading + JSEP — only basic ort-wasm.wasm or ort-wasm-simd.wasm exist
+            ort.env.wasm.numThreads = 1;     // stops ORT from loading *-threaded.jsep.mjs
+            ort.env.wasm.simd = true;  // use SIMD if available
+            ort.env.wasm.proxy = false; // no web worker proxy
+            ort.env.wasm.wasmPaths = {
+                'ort-wasm.wasm': chrome.runtime.getURL('ort-wasm.wasm'),
+                'ort-wasm-simd.wasm': chrome.runtime.getURL('ort-wasm-simd.wasm'),
+                // Fallback: if only basic wasm exists, map simd → basic
+            };
+
             const modelUrl = chrome.runtime.getURL("model/model.onnx");
-            ort.env.wasm.wasmPaths = chrome.runtime.getURL("");
-            const session = await ort.InferenceSession.create(modelUrl, { executionProviders: ["wasm"] });
+            const session = await ort.InferenceSession.create(modelUrl, {
+                executionProviders: ["wasm"],
+                graphOptimizationLevel: "basic",
+            });
             const tensor = new ort.Tensor("float32", Float32Array.from(features), [1, 48]);
             const results = await session.run({ input: tensor });
 
-            // Extract probability (output_probabilities is shape [1,2], index 1 = phishing)
+            // Extract phishing probability from model outputs
             const probTensor = results.output_probability || results.probabilities || results.output_probabilities;
             if (probTensor) {
                 const data = probTensor.data;
-                // data is [p_legit, p_phish] per sample
                 mlProb = data.length >= 2 ? data[1] : data[0];
             } else {
-                // Fallback: label
                 const label = results.output_label || results.label;
                 mlProb = label ? (Number(label.data[0]) === 1 ? 0.9 : 0.1) : 0.1;
             }
         } catch (e) {
-            console.warn("[BV] WASM/ML error (falling back to heuristics):", e.message);
+            console.warn("[BV] WASM/ML layer failed (heuristics still active):", e.message);
         }
 
         return { mlProb, features };

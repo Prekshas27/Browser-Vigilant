@@ -1,18 +1,81 @@
 <script>
   import "./app.css";
+  import { onMount } from "svelte";
   import Shield from "./components/Shield.svelte";
   import History from "./components/History.svelte";
-  import Blockchain from "./components/Blockchain.svelte";
+  import ThreatMap from "./components/ThreatMap.svelte";
   import Settings from "./components/Settings.svelte";
 
   let activeTab = "shield";
 
+  // State loaded from background.js via chrome.runtime.sendMessage
+  let tabState = null;
+  let settings = null;
+  let stats = null;
+  let history = [];
+  let chain = [];
+  let chainTampered = false;
+  let loading = true;
+  let currentTabId = null;
+  let currentTabUrl = ""; // passed to Shield for instant auto-scan
+
   const tabs = [
     { id: "shield", label: "Shield", icon: "🛡️" },
     { id: "history", label: "History", icon: "📋" },
-    { id: "chain", label: "Ledger", icon: "⛓️" },
+    { id: "ledger", label: "Ledger", icon: "⛓️" },
     { id: "settings", label: "Settings", icon: "⚙️" },
   ];
+
+  onMount(async () => {
+    if (typeof chrome === "undefined" || !chrome?.runtime?.sendMessage) {
+      loading = false;
+      return;
+    }
+    try {
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      currentTabId = tab?.id ?? null;
+      currentTabUrl = tab?.url ?? "";
+
+      const res = await chrome.runtime.sendMessage({
+        type: "GET_STATE",
+        tabId: currentTabId,
+      });
+
+      tabState = res.tabState ?? null;
+      settings = res.settings ?? null;
+      stats = res.stats ?? null;
+      history = res.history ?? [];
+      chain = res.chain ?? [];
+      chainTampered = res.chainTampered ?? false;
+    } catch (e) {
+      console.warn("[BV Popup] Could not load state:", e);
+    } finally {
+      loading = false;
+    }
+  });
+
+  // When settings change inside Settings.svelte, persist and refresh
+  async function onSettingsChange(newSettings) {
+    settings = newSettings;
+    if (typeof chrome !== "undefined" && chrome?.runtime?.sendMessage) {
+      await chrome.runtime.sendMessage({
+        type: "SAVE_SETTINGS",
+        settings: newSettings,
+      });
+    }
+  }
+
+  async function onClearHistory() {
+    if (typeof chrome !== "undefined" && chrome?.runtime?.sendMessage) {
+      await chrome.runtime.sendMessage({ type: "CLEAR_HISTORY" });
+      history = [];
+    }
+  }
+
+  $: threatBlocks = chain.filter((b) => b.type === "THREAT_BLOCKED").length;
 </script>
 
 <div class="popup-root">
@@ -20,10 +83,10 @@
   <header class="header">
     <div class="logo">
       <div class="logo-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path
             d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.25C17.25 22.15 21 17.25 21 12V7L12 2z"
-            fill="url(#shieldGrad)"
+            fill="url(#sg)"
             stroke="rgba(99,179,237,0.4)"
             stroke-width="0.5"
           />
@@ -36,7 +99,7 @@
           />
           <defs>
             <linearGradient
-              id="shieldGrad"
+              id="sg"
               x1="3"
               y1="2"
               x2="21"
@@ -51,23 +114,54 @@
       </div>
       <div class="logo-text">
         <span class="logo-name">Browser Vigilant</span>
-        <span class="logo-version">v1.0 · WASM Engine</span>
+        <span class="logo-sub">v2.0 · AI+Blockchain Engine</span>
       </div>
     </div>
-    <div class="status-badge active">
+
+    <div
+      class="status-badge {settings?.protection === false
+        ? 'paused'
+        : 'active'}"
+    >
       <span class="status-dot"></span>
-      Active
+      {settings?.protection === false ? "Paused" : "Active"}
     </div>
   </header>
 
-  <!-- Tabs -->
+  <!-- Stats strip -->
+  {#if stats && !loading}
+    <div class="stats-strip">
+      <div class="stat-item">
+        <span class="stat-num">{stats.totalScanned ?? 0}</span>
+        <span class="stat-lbl">Scanned</span>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-item">
+        <span class="stat-num danger">{stats.totalBlocked ?? 0}</span>
+        <span class="stat-lbl">Blocked</span>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-item">
+        <span class="stat-num warn">{stats.threatsToday ?? 0}</span>
+        <span class="stat-lbl">Today</span>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-item">
+        <span class="stat-num chain">{threatBlocks}</span>
+        <span class="stat-lbl">In Ledger</span>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Tab bar -->
   <nav class="tabs">
     {#each tabs as tab}
       <button
         class="tab-btn {activeTab === tab.id ? 'active' : ''}"
         on:click={() => (activeTab = tab.id)}
+        id="tab-{tab.id}"
       >
-        <span>{tab.icon}</span>
+        <span class="tab-icon">{tab.icon}</span>
         <span>{tab.label}</span>
       </button>
     {/each}
@@ -75,21 +169,26 @@
 
   <!-- Content -->
   <main class="content">
-    {#if activeTab === "shield"}
-      <Shield />
+    {#if loading}
+      <div class="loader-wrap">
+        <div class="loader-ring"></div>
+        <p class="loader-txt">Loading engine state…</p>
+      </div>
+    {:else if activeTab === "shield"}
+      <Shield {tabState} {stats} tabUrl={currentTabUrl} />
     {:else if activeTab === "history"}
-      <History />
-    {:else if activeTab === "chain"}
-      <Blockchain />
+      <History {history} onClear={onClearHistory} />
+    {:else if activeTab === "ledger"}
+      <ThreatMap {chain} {chainTampered} />
     {:else if activeTab === "settings"}
-      <Settings />
+      <Settings {settings} onChange={onSettingsChange} />
     {/if}
   </main>
 
   <!-- Footer -->
   <footer class="footer">
-    <span class="footer-text"
-      >100% On-Device · Zero Data Leaks · Rust WASM Core</span
+    <span class="footer-txt"
+      >100% On-Device · Zero Data Leaks · Rust WASM · SHA-256 Ledger</span
     >
   </footer>
 </div>
@@ -99,75 +198,57 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    min-height: 500px;
+    min-height: 540px;
+    max-height: 600px;
     background: var(--bg-primary);
+    overflow: hidden;
   }
 
+  /* Header */
   .header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 16px 12px;
+    padding: 12px 14px 10px;
     border-bottom: 1px solid var(--border);
     background: var(--bg-secondary);
-    position: relative;
-    overflow: hidden;
+    flex-shrink: 0;
   }
-
-  .header::after {
-    content: "";
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      var(--border-glow),
-      transparent
-    );
-  }
-
   .logo {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 9px;
   }
-
   .logo-icon {
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     background: linear-gradient(
       135deg,
-      rgba(59, 130, 246, 0.2),
-      rgba(29, 78, 216, 0.1)
+      rgba(59, 130, 246, 0.18),
+      rgba(29, 78, 216, 0.08)
     );
-    border: 1px solid rgba(59, 130, 246, 0.3);
-    border-radius: 10px;
+    border: 1px solid rgba(59, 130, 246, 0.28);
+    border-radius: 9px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 0 12px rgba(59, 130, 246, 0.15);
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.12);
   }
-
   .logo-text {
     display: flex;
     flex-direction: column;
     gap: 1px;
   }
-
   .logo-name {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
     color: var(--text-primary);
     letter-spacing: 0.02em;
   }
-
-  .logo-version {
-    font-size: 9px;
-    font-family: var(--font-mono);
+  .logo-sub {
+    font-size: 8px;
     color: var(--text-muted);
+    font-family: var(--font-mono);
     letter-spacing: 0.05em;
     text-transform: uppercase;
   }
@@ -176,26 +257,36 @@
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 10px;
-    font-weight: 600;
+    font-size: 9px;
+    font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     padding: 4px 10px;
     border-radius: 100px;
+  }
+  .status-badge.active {
     border: 1px solid var(--accent-green);
     color: var(--accent-green);
     background: rgba(16, 185, 129, 0.08);
   }
-
+  .status-badge.paused {
+    border: 1px solid var(--text-muted);
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.04);
+  }
   .status-dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
+  }
+  .status-badge.active .status-dot {
     background: var(--accent-green);
     box-shadow: 0 0 6px var(--accent-green);
     animation: pulse 2s infinite;
   }
-
+  .status-badge.paused .status-dot {
+    background: var(--text-muted);
+  }
   @keyframes pulse {
     0%,
     100% {
@@ -203,63 +294,139 @@
       transform: scale(1);
     }
     50% {
-      opacity: 0.6;
-      transform: scale(0.85);
+      opacity: 0.5;
+      transform: scale(0.8);
     }
   }
 
+  /* Stats strip */
+  .stats-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 7px 12px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+  }
+  .stat-num {
+    font-size: 15px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--accent);
+  }
+  .stat-num.danger {
+    color: var(--accent-red);
+  }
+  .stat-num.warn {
+    color: var(--accent-amber);
+  }
+  .stat-num.chain {
+    color: #a78bfa;
+  }
+  .stat-lbl {
+    font-size: 8px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .stat-sep {
+    width: 1px;
+    height: 24px;
+    background: var(--border);
+  }
+
+  /* Tabs */
   .tabs {
     display: flex;
     border-bottom: 1px solid var(--border);
     background: var(--bg-secondary);
-    padding: 0 8px;
+    padding: 0 6px;
+    flex-shrink: 0;
   }
-
   .tab-btn {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
-    padding: 9px 4px;
+    gap: 4px;
+    padding: 8px 2px;
     border: none;
     background: transparent;
     color: var(--text-muted);
     font-family: var(--font-main);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 500;
     cursor: pointer;
     border-bottom: 2px solid transparent;
-    transition: all 0.2s ease;
-    letter-spacing: 0.02em;
     position: relative;
     bottom: -1px;
+    transition: all 0.18s ease;
+    letter-spacing: 0.02em;
   }
-
   .tab-btn:hover {
     color: var(--text-secondary);
   }
-
   .tab-btn.active {
     color: var(--accent);
     border-bottom-color: var(--accent);
   }
+  .tab-icon {
+    font-size: 13px;
+  }
 
+  /* Content */
   .content {
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    padding: 14px;
     background: var(--bg-primary);
   }
 
-  .footer {
-    padding: 8px 16px;
-    border-top: 1px solid var(--border);
-    background: var(--bg-secondary);
+  /* Loader */
+  .loader-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 14px;
+  }
+  .loader-ring {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--accent);
+    border-right-color: var(--accent);
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .loader-txt {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
   }
 
-  .footer-text {
-    font-size: 9px;
+  /* Footer */
+  .footer {
+    padding: 6px 14px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-secondary);
+    flex-shrink: 0;
+  }
+  .footer-txt {
+    font-size: 8px;
     color: var(--text-muted);
     font-family: var(--font-mono);
     letter-spacing: 0.04em;
