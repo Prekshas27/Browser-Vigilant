@@ -5,6 +5,7 @@
   import History from "./components/History.svelte";
   import ThreatMap from "./components/ThreatMap.svelte";
   import Settings from "./components/Settings.svelte";
+  import shieldLogo from "./assets/shield.png";
 
   let activeTab = "shield";
   let isLightMode = false;
@@ -116,21 +117,15 @@
   <!-- Header -->
   <header class="header">
     <div class="logo">
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={settings?.protection === false
-          ? "var(--text-muted)"
-          : "#34d399"}
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        class="logo-shield"
-      >
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      </svg>
+      <img
+        src={shieldLogo}
+        class="logo-shield {settings?.protection === false
+          ? 'paused-logo'
+          : ''}"
+        alt="Browser Vigilant Logo"
+        width="28"
+        height="28"
+      />
       <div class="logo-text">
         <span class="logo-name">Browser Vigilant</span>
         <span
@@ -233,6 +228,10 @@
   }
   .logo-shield {
     flex-shrink: 0;
+    transition: all 0.2s;
+  }
+  .paused-logo {
+    filter: grayscale(1) opacity(0.5);
   }
   .logo-text {
     display: flex;

@@ -2,29 +2,23 @@ document.addEventListener("DOMContentLoaded", () => {
     // Parse query params from content.js
     const params = new URLSearchParams(window.location.search);
     const blockedUrl = decodeURIComponent(params.get("url") || "");
-    const risk = parseInt(params.get("risk") || "0", 10);
     const threat = params.get("threat") || "Unknown Threat";
     const rawSignals = decodeURIComponent(params.get("signals") || "");
     const signals = rawSignals ? rawSignals.split("|").filter(Boolean) : [];
 
-    // Populate
+    // Populate Threat Info
     document.getElementById("blockedUrl").textContent = blockedUrl || document.referrer || "Unknown";
-    document.getElementById("threatType").textContent = threat;
+    const displayThreat = signals.length > 0 ? signals.join(", ") : threat;
+    document.getElementById("threatType").textContent = displayThreat;
     document.getElementById("threatTypeLabel").textContent = threat.toUpperCase();
-    document.getElementById("riskNum").textContent = `${risk}%`;
-    document.getElementById("riskFill").style.width = `${Math.min(risk, 100)}%`;
-
-    const list = document.getElementById("signalsList");
-    (signals.length ? signals : ["Multi-layer threat analysis"]).forEach(sig => {
-        const pill = document.createElement("div");
-        pill.className = "signal-pill";
-        pill.innerHTML = `<span class="signal-dot"></span>${sig}`;
-        list.appendChild(pill);
-    });
 
     // Go back safely
     document.getElementById("btnGoBack").addEventListener("click", () => {
-        history.back();
+        if (window.history.length > 1) {
+            window.history.back();
+        } else {
+            window.location.href = "chrome://newtab/";
+        }
     });
 
     // Proceed anyway — warn and proceed

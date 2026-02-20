@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Threat Blocked — Browser Vigilant</title>
+    <title>Browser Vigilant</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
     <style>
@@ -401,11 +401,12 @@
             <div class="shield-ring"></div>
             <div class="shield-ring"></div>
             <div class="shield-icon">
-                <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.25C17.25 22.15 21 17.25 21 12V7L12 2z"
-                        fill="rgba(239,68,68,0.2)" stroke="#ef4444" stroke-width="1.5" />
-                    <path d="M12 8v4M12 16h.01" stroke="#ef4444" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round" />
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                        fill="var(--red-dim)"></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
                 </svg>
             </div>
         </div>
@@ -427,23 +428,6 @@
             <div class="info-row">
                 <span class="info-key">Threat Type</span>
                 <span class="info-val"><span class="tag tag-red" id="threatType">—</span></span>
-            </div>
-            <div class="info-row">
-                <span class="info-key">Risk Score</span>
-                <span class="info-val">
-                    <div class="risk-bar-wrap">
-                        <div class="risk-bar-bg">
-                            <div class="risk-bar-fill" id="riskFill" style="width:0%"></div>
-                        </div>
-                        <span class="risk-num" id="riskNum">—</span>
-                    </div>
-                </span>
-            </div>
-            <div class="info-row">
-                <span class="info-key">Signals</span>
-                <span class="info-val">
-                    <div class="signals-wrap" id="signalsList"></div>
-                </span>
             </div>
         </div>
 
