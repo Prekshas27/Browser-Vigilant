@@ -546,24 +546,16 @@
         {/if}
     {/if}
 
-    <!-- Global stats -->
+    <!-- Global stats (Simplified) -->
     {#if stats}
-        <div class="global-stats">
-            <div class="gs-item">
-                <span class="gs-num">{stats?.totalScanned ?? 0}</span>
-                <span class="gs-lbl">Total</span>
+        <div class="hero-stats">
+            <div class="hs-main">
+                <span class="hs-num">{stats?.totalBlocked ?? 0}</span>
+                <span class="hs-lbl">Threats Prevented</span>
             </div>
-            <div class="gs-item">
-                <span class="gs-num" style="color:var(--accent-red)"
-                    >{stats?.totalBlocked ?? 0}</span
-                >
-                <span class="gs-lbl">Blocked</span>
-            </div>
-            <div class="gs-item">
-                <span class="gs-num" style="color:var(--accent-amber)"
-                    >{stats?.threatsToday ?? 0}</span
-                >
-                <span class="gs-lbl">Today</span>
+            <div class="hs-sub">
+                <span class="hs-sub-icon">🛡️</span>
+                <span>{stats?.totalScanned ?? 0} pages safely scanned</span>
             </div>
         </div>
     {/if}
@@ -963,30 +955,50 @@
         font-family: var(--font-mono);
     }
 
-    .global-stats {
-        display: flex;
-        justify-content: space-around;
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 9px 8px;
-    }
-    .gs-item {
+    .hero-stats {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 1px;
+        border-radius: 12px;
+        padding: 16px 12px;
+        gap: 8px;
+        background: linear-gradient(
+            135deg,
+            rgba(239, 68, 68, 0.05),
+            rgba(239, 68, 68, 0.01)
+        );
+        border: 1px solid rgba(239, 68, 68, 0.2);
     }
-    .gs-num {
-        font-size: 14px;
-        font-weight: 700;
+    .hs-main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+    }
+    .hs-num {
+        font-size: 28px;
+        font-weight: 800;
         font-family: var(--font-mono);
-        color: var(--accent);
+        color: var(--accent-red);
+        text-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
     }
-    .gs-lbl {
-        font-size: 8px;
-        color: var(--text-muted);
+    .hs-lbl {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--text-primary);
         text-transform: uppercase;
         letter-spacing: 0.05em;
+    }
+    .hs-sub {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        background: var(--bg-secondary);
+        padding: 4px 10px;
+        border-radius: 100px;
+        border: 1px solid var(--border);
     }
 </style>

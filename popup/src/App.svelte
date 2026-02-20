@@ -7,6 +7,7 @@
   import Settings from "./components/Settings.svelte";
 
   let activeTab = "shield";
+  let isLightMode = false;
 
   // State loaded from background.js via chrome.runtime.sendMessage
   let tabState = null;
@@ -20,13 +21,19 @@
   let currentTabUrl = ""; // passed to Shield for instant auto-scan
 
   const tabs = [
-    { id: "shield", label: "Shield", icon: "🛡️" },
-    { id: "history", label: "History", icon: "📋" },
-    { id: "ledger", label: "Ledger", icon: "⛓️" },
-    { id: "settings", label: "Settings", icon: "⚙️" },
+    { id: "shield", label: "Shield" },
+    { id: "history", label: "History" },
+    { id: "ledger", label: "Ledger" },
+    { id: "settings", label: "Settings" },
   ];
 
   onMount(async () => {
+    // Check localStorage for preferred theme
+    if (localStorage.getItem("theme") === "light") {
+      isLightMode = true;
+      document.documentElement.classList.add("light-theme");
+    }
+
     if (typeof chrome === "undefined" || !chrome?.runtime?.sendMessage) {
       loading = false;
       return;
@@ -75,6 +82,17 @@
     }
   }
 
+  function toggleTheme() {
+    isLightMode = !isLightMode;
+    if (isLightMode) {
+      document.documentElement.classList.add("light-theme");
+      localStorage.setItem("theme", "light");
+    } else {
+      document.documentElement.classList.remove("light-theme");
+      localStorage.setItem("theme", "dark");
+    }
+  }
+
   $: threatBlocks = chain.filter((b) => b.type === "THREAT_BLOCKED").length;
 </script>
 
@@ -118,40 +136,26 @@
       </div>
     </div>
 
-    <div
-      class="status-badge {settings?.protection === false
-        ? 'paused'
-        : 'active'}"
-    >
-      <span class="status-dot"></span>
-      {settings?.protection === false ? "Paused" : "Active"}
+    <div class="header-actions">
+      <button
+        class="theme-toggle"
+        on:click={toggleTheme}
+        aria-label="Toggle Theme"
+        title={isLightMode ? "Switch to Dark Mode" : "Switch to Light Mode"}
+      >
+        {isLightMode ? "🌙" : "☀️"}
+      </button>
+
+      <div
+        class="status-badge {settings?.protection === false
+          ? 'paused'
+          : 'active'}"
+      >
+        <span class="status-dot"></span>
+        {settings?.protection === false ? "Paused" : "Active"}
+      </div>
     </div>
   </header>
-
-  <!-- Stats strip -->
-  {#if stats && !loading}
-    <div class="stats-strip">
-      <div class="stat-item">
-        <span class="stat-num">{stats.totalScanned ?? 0}</span>
-        <span class="stat-lbl">Scanned</span>
-      </div>
-      <div class="stat-sep"></div>
-      <div class="stat-item">
-        <span class="stat-num danger">{stats.totalBlocked ?? 0}</span>
-        <span class="stat-lbl">Blocked</span>
-      </div>
-      <div class="stat-sep"></div>
-      <div class="stat-item">
-        <span class="stat-num warn">{stats.threatsToday ?? 0}</span>
-        <span class="stat-lbl">Today</span>
-      </div>
-      <div class="stat-sep"></div>
-      <div class="stat-item">
-        <span class="stat-num chain">{threatBlocks}</span>
-        <span class="stat-lbl">In Ledger</span>
-      </div>
-    </div>
-  {/if}
 
   <!-- Tab bar -->
   <nav class="tabs">
@@ -161,7 +165,6 @@
         on:click={() => (activeTab = tab.id)}
         id="tab-{tab.id}"
       >
-        <span class="tab-icon">{tab.icon}</span>
         <span>{tab.label}</span>
       </button>
     {/each}
@@ -253,6 +256,27 @@
     text-transform: uppercase;
   }
 
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .theme-toggle {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    border-radius: 8px;
+    transition: background 0.2s;
+  }
+  .theme-toggle:hover {
+    background: var(--bg-card-hover);
+  }
+
   .status-badge {
     display: flex;
     align-items: center;
@@ -281,65 +305,9 @@
   }
   .status-badge.active .status-dot {
     background: var(--accent-green);
-    box-shadow: 0 0 6px var(--accent-green);
-    animation: pulse 2s infinite;
   }
   .status-badge.paused .status-dot {
     background: var(--text-muted);
-  }
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 1;
-      transform: scale(1);
-    }
-    50% {
-      opacity: 0.5;
-      transform: scale(0.8);
-    }
-  }
-
-  /* Stats strip */
-  .stats-strip {
-    display: flex;
-    align-items: center;
-    justify-content: space-around;
-    padding: 7px 12px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .stat-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1px;
-  }
-  .stat-num {
-    font-size: 15px;
-    font-weight: 700;
-    font-family: var(--font-mono);
-    color: var(--accent);
-  }
-  .stat-num.danger {
-    color: var(--accent-red);
-  }
-  .stat-num.warn {
-    color: var(--accent-amber);
-  }
-  .stat-num.chain {
-    color: #a78bfa;
-  }
-  .stat-lbl {
-    font-size: 8px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .stat-sep {
-    width: 1px;
-    height: 24px;
-    background: var(--border);
   }
 
   /* Tabs */
