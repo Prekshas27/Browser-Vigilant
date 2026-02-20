@@ -19,10 +19,10 @@
   <img src="https://img.shields.io/badge/Offline-First-0ea5e9?style=for-the-badge"/>
 </p>
 
----
 
+---
     
-# 🛡 Browser Vigilant
+# 🛡 Browser Vigilant 
 
 > **A multi-layer AI security engine running entirely inside your browser**
 
@@ -35,8 +35,6 @@ it’s an **on-device cybersecurity engine**.
 ---
 
 # ⚡ Detection Pipeline
-
-<div align="center">
     
 ```bash
 User Types URL
@@ -54,7 +52,6 @@ DOM Behavioral Scanner
 BLOCK / WARN / SAFE
 
 ```
-</div>
 
 Latency: **< 5ms**
 
@@ -100,10 +97,9 @@ Extracts **48 mathematical URL signals**:
 
 Compiled using:
 
+```bash
 Rust → wasm-bindgen → WebAssembly
-
-----
-
+```
 Near-native performance inside browser.
 
 ---
@@ -119,8 +115,9 @@ Models:
 
 Runtime:
 
+```bash
 ONNX Runtime Web (WASM backend)
-
+```
 No network calls.
 
 ---
@@ -142,13 +139,13 @@ Detects:
 
 # 🔒 Privacy Architecture
 
-Only this may sync:
+## Only this may sync:
 
-SHA-256(hostname)
-confidence score
-timestamp
+- SHA-256(hostname)
+- Confidence score
+- Timestamp
 
-Never transmitted:
+## Never transmitted:
 - URLs
 - Queries
 - Form data
@@ -156,18 +153,18 @@ Never transmitted:
 - Cookies
 - Credentials
 
-Works offline.
+## Works offline.
 
 ---
 
 # 🌐 Decentralized Threat Vault
 
-Community-verified hash network.
+## Community-verified hash network:
 
-hash(domain)
-confidence
-trust score
-timestamp
+- Hash(domain)
+- Confidence
+- Trust score
+- Timestamp
 
 No raw URLs shared.  
 Zero-knowledge sync.
@@ -176,19 +173,16 @@ Zero-knowledge sync.
 
 # 🧬 Integrity Verification
 
-Each update verified with Merkle root:
+## Each update verified with Merkle root:
 
-MerkleRoot =
-H( H(hash1 + hash2) +
-H(hash3 + hash4) )
-
+```bash
+MerkleRoot = H( H(hash1 + hash2) + H(hash3 + hash4) )
+```
 Visible in UI for tamper detection.
 
 ---
 
 # 📊 Performance
-
-<div align="center">
     
 ```bash
 |      Metric      |   Value   |
@@ -201,14 +195,10 @@ Visible in UI for tamper detection.
 |------------------|-----------|
 ```
 
-</div>
-
 ---
 
 # 🏗 Tech Stack
 
-<div align="center">
-  
 ```bash
 |     Layer         |        Tech          |
 |-------------------|----------------------|
@@ -222,8 +212,6 @@ Visible in UI for tamper detection.
 |-------------------|----------------------|
 
 ```
-
-</div>
 
 ---
 
@@ -286,13 +274,15 @@ npm run build
 
 # Load Extension
 
+```bash
 Open chrome://extensions
+```
 
-Enable Developer Mode
+- Enable Developer Mode
 
-Click Load Unpacked
+- Click Load Unpacked
 
-Select project root
+- Select project root
 
 ---
 
@@ -338,7 +328,7 @@ Reload extension after build.
 |       Test	   |   Result   |
 |----------------|------------|
 |Accuracy	       |     98%    |
-|False positives |	   <1%    | 
+|False positives |	  <1%     | 
 |Detection time	 |    ~3ms    |
 
 </div>
@@ -347,17 +337,17 @@ Reload extension after build.
 
 # 🗺 Roadmap
 
- Firefox support
+ - Firefox support
 
- Edge store release
+ - Edge store release
 
- Transformer URL model
+ - Transformer URL model
 
- Federated threat learning
+ - Federated threat learning
 
- WASM SIMD optimization
+ - WASM SIMD optimization
 
- WebGPU inference
+ - WebGPU inference
 
 ---
 
@@ -377,9 +367,13 @@ PRs welcome.
 
 ---
 
-# 🧑‍💻 Author
-
+<h1 align="center">
+🧑‍💻 Author
+  </h1>
+  <div align="center">
 Built for privacy-first AI security.
+  </div>
+
 
 ---
 <h1 align="center">
