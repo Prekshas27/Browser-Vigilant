@@ -1,7 +1,6 @@
 # 🛡 Browser Vigilant v2.0
 
 > **Multi-layer AI cybersecurity browser extension** — 100% on-device. Blocks phishing, UPI fraud, malicious downloads, and DOM attacks *before* pages even load.
-
 ![Version](https://img.shields.io/badge/version-2.0.0-blue)
 ![MV3](https://img.shields.io/badge/Manifest-V3-green)
 ![License](https://img.shields.io/badge/license-MIT-purple)
