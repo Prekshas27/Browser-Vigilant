@@ -10,8 +10,8 @@
   --border-glow: rgba(0, 0, 0, 0.10);
 
   /* Soft Colors from Mockup */
-  --accent: #1A202C;
-  --accent-glow: rgba(26, 32, 44, 0.1);
+  --accent: #FFFFFF;
+  --accent-glow: rgba(255, 255, 255, 0.1);
   --accent-green: #34D399;
   --accent-green-light: #D1FAE5;
   --accent-red: #FF7B72;
@@ -39,7 +39,7 @@
   --border: rgba(255, 255, 255, 0.08);
   --border-glow: rgba(255, 255, 255, 0.12);
 
-  --accent: #F7FAFC;
+  --accent: #FFFFFF;
   --accent-glow: rgba(255, 255, 255, 0.1);
   --accent-green: #2EBA86;
   --accent-green-light: rgba(46, 186, 134, 0.2);
